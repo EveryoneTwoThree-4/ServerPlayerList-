@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ServerPlayerList — Minecraft</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;min-height:100vh;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
+      color:#fff;background:
+      radial-gradient(circle at 20% 10%,rgba(67,160,71,.25),transparent 30%),
+      radial-gradient(circle at 80% 80%,rgba(46,125,50,.2),transparent 30%),
+      #0b0f0c;
+      display:flex;justify-content:center;padding:32px 16px;
+    }
+    .wrap{width:min(900px,100%)}
+    .card{
+      background:rgba(17,23,18,.92);border:1px solid #2c3b2e;border-radius:24px;
+      box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden
+    }
+    header{padding:30px 28px 22px;border-bottom:1px solid #263329}
+    .brand{display:flex;gap:14px;align-items:center}
+    .logo{width:52px;height:52px;border-radius:14px;background:#4caf50;display:grid;place-items:center;font-size:28px}
+    h1{margin:0;font-size:28px}
+    .addr{margin:5px 0 0;color:#9fb0a1;font-family:ui-monospace,monospace}
+    .content{padding:28px}
+    .status{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+    .badge{display:inline-flex;align-items:center;gap:9px;padding:9px 13px;border-radius:999px;background:#17341d;color:#7ee787;font-weight:700}
+    .badge.off{background:#3a1818;color:#ff8a8a}
+    .dot{width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
+    .count{font-size:42px;font-weight:800;line-height:1}
+    .muted{color:#8f9d91}
+    .players{margin-top:28px}
+    .players h2{font-size:18px;margin:0 0 14px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+    .player{display:flex;align-items:center;gap:12px;padding:13px;background:#151d16;border:1px solid #263329;border-radius:14px}
+    .avatar{width:42px;height:42px;border-radius:8px;image-rendering:pixelated;background:#263329}
+    .name{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .empty{padding:30px;text-align:center;border:1px dashed #334236;border-radius:14px;color:#8f9d91}
+    footer{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-top:24px;color:#718073;font-size:13px}
+    button{cursor:pointer;border:1px solid #35553a;background:#19301d;color:#bdecc2;padding:9px 13px;border-radius:10px;font-weight:700}
+    button:hover{background:#234a2a}
+    .error{margin-top:16px;color:#ff9b9b;font-size:14px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <header>
+      <div class="brand">
+        <div class="logo">⛏️</div>
+        <div>
+          <h1>ServerPlayerList</h1>
+          <div class="addr">hi3.qwertyx.host:28982</div>
+        </div>
+      </div>
+    </header>
+    <div class="content">
+      <div class="status">
+        <div>
+          <div id="badge" class="badge"><span class="dot"></span><span>Проверяем...</span></div>
+          <div id="version" class="muted" style="margin-top:10px">—</div>
+        </div>
+        <div>
+          <div id="count" class="count">—</div>
+          <div class="muted">игроков онлайн</div>
+        </div>
+      </div>
+
+      <div class="players">
+        <h2>Игроки сейчас</h2>
+        <div id="list" class="grid">
+          <div class="empty">Загрузка...</div>
+        </div>
+      </div>
+
+      <div id="error" class="error"></div>
+      <footer>
+        <span id="updated">Последнее обновление: —</span>
+        <button id="refresh">Обновить</button>
+      </footer>
+    </div>
+  </div>
+</div>
+
+<script>
+const SERVER = "hi3.qwertyx.host:28982";
+const API = `https://api.mcsrvstat.us/3/${encodeURIComponent(SERVER)}`;
+const list = document.getElementById("list");
+const badge = document.getElementById("badge");
+const count = document.getElementById("count");
+const version = document.getElementById("version");
+const updated = document.getElementById("updated");
+const errorBox = document.getElementById("error");
+
+function setBadge(online) {
+  badge.className = "badge" + (online ? "" : " off");
+  badge.querySelector("span:last-child").textContent = online ? "СЕРВЕР ONLINE" : "СЕРВЕР OFFLINE";
+}
+
+function avatarUrl(uuid, name) {
+  if (uuid) return `https://crafatar.com/avatars/${uuid}?size=84&overlay`;
+  return `https://mc-heads.net/avatar/${encodeURIComponent(name)}/84`;
+}
+
+async function load() {
+  errorBox.textContent = "";
+  try {
+    const res = await fetch(API, {cache:"no-store"});
+    if (!res.ok) throw new Error("API HTTP " + res.status);
+    const data = await res.json();
+
+    setBadge(!!data.online);
+    if (!data.online) {
+      count.textContent = "0";
+      version.textContent = "Сервер сейчас недоступен";
+      list.innerHTML = '<div class="empty">Сейчас сервер офлайн.</div>';
+      updated.textContent = "Проверено: " + new Date().toLocaleTimeString("ru-RU");
+      return;
+    }
+
+    const online = data.players?.online ?? 0;
+    const max = data.players?.max ?? "?";
+    count.textContent = `${online} / ${max}`;
+    version.textContent = data.version ? `Версия: ${data.version}` : "Minecraft сервер";
+
+    const players = data.players?.list || [];
+    if (!players.length) {
+      list.innerHTML = online
+        ? '<div class="empty">Сервер онлайн, но список имён не предоставляется сервером.</div>'
+        : '<div class="empty">Никого нет онлайн.</div>';
+    } else {
+      list.innerHTML = players.map(p => `
+        <div class="player">
+          <img class="avatar" src="${avatarUrl(p.uuid, p.name)}" alt="">
+          <div class="name">${escapeHtml(p.name)}</div>
+        </div>
+      `).join("");
+    }
+
+    updated.textContent = "Последнее обновление: " + new Date().toLocaleTimeString("ru-RU");
+  } catch (e) {
+    setBadge(false);
+    count.textContent = "—";
+    list.innerHTML = '<div class="empty">Не удалось получить данные о сервере.</div>';
+    errorBox.textContent = "Ошибка соединения с API. Если сайт размещён на GitHub Pages и браузер блокирует запрос, понадобится небольшой бесплатный прокси/Cloudflare Worker.";
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+document.getElementById("refresh").addEventListener("click", load);
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
